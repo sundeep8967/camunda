@@ -154,8 +154,24 @@ runs:
         secret/data/github.com/organizations/camunda NEXUS_USR | ci-account-username;
         ${{ steps.checks.outputs.dockerhub-vault-path }} REGISTRY_HUB_DOCKER_COM_PSW${{ inputs.dockerhub-readonly == 'true' && '_READ_ONLY' || ''}} | dockerhub-token;
         ${{ steps.checks.outputs.dockerhub-vault-path }} REGISTRY_HUB_DOCKER_COM_USR | dockerhub-username;
-<<<<<<< HEAD
         secret/data/products/camunda/ci/github-actions REGISTRY_MINIMUS_PSW | minimus-token
+  # Kept separate from "Import Secrets" so that jobs which do not ask for Harbor
+  # never depend on this path resolving.
+  - name: Import Harbor Secrets
+    if: >-
+      steps.is-fork.outputs.is-fork != 'true' &&
+      inputs.harbor == 'true'
+    id: harbor-secrets
+    uses: hashicorp/vault-action@892a26828f195e65540a40b4768ae4571f51ebfc # v4.0.0
+    with:
+      url: ${{ inputs.vault-address }}
+      method: approle
+      roleId: ${{ inputs.vault-role-id }}
+      secretId: ${{ inputs.vault-secret-id }}
+      exportEnv: false
+      secrets: |
+        secret/data/products/camunda/ci/harbor username | harbor-username;
+        secret/data/products/camunda/ci/harbor password | harbor-password
   - name: Logs on to Minimus    # Minimus login is disabled for fork PRs
     if: >-
       steps.checks.outputs.is-fork != 'true' &&
@@ -165,11 +181,6 @@ runs:
       registry: reg.mini.dev
       username: minimus
       password: ${{ steps.secrets.outputs.minimus-token }}
-=======
-        secret/data/products/camunda/ci/github-actions REGISTRY_MINIMUS_PSW | minimus-token;
-        secret/data/products/camunda/ci/harbor HARBOR_USR | harbor-username;
-        secret/data/products/camunda/ci/harbor HARBOR_PSW | harbor-password
->>>>>>> f555e27f (ci: log in to Harbor with a robot account)
   - name: Setup Java
     uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
     with:
