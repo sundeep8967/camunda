@@ -110,7 +110,7 @@ const List: FC = () => {
         loading={loading}
         menuItems={[
           {
-            label: t("editGlobalTaskListener"),
+            label: t("editGlobalTaskListenerTrigger"),
             icon: Edit,
             onClick: (entity) =>
               editGlobalTaskListener(entity.originalListener),

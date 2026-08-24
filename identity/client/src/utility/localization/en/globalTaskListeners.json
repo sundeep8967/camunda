@@ -24,6 +24,7 @@
   "learnMoreAboutGlobalTaskListeners": "Learn more about global user task listeners",
   "globalTaskListenerCreated": "User task listener created",
   "editGlobalTaskListener": "Update user task listener",
+  "editGlobalTaskListenerTrigger": "Update",
   "update": "Update",
   "editingGlobalTaskListener": "Updating...",
   "globalTaskListenerUpdated": "User task listener updated",
