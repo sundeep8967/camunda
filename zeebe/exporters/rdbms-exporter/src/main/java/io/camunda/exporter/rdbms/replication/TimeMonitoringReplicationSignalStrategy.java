@@ -74,7 +74,9 @@ public final class TimeMonitoringReplicationSignalStrategy
   @Override
   public Duration computePauseLag(
       final List<ReplicationLagStatus> statuses, final Optional<Duration> queueHeadAge) {
-    if (statuses.size() < config.getMinSyncReplicas()) {
+    final boolean quorumNotMet =
+        queueHeadAge.isEmpty() && statuses.size() < config.getMinSyncReplicas();
+    if (quorumNotMet) {
       return PAUSE_WORST_CASE;
     }
     return statuses.stream()

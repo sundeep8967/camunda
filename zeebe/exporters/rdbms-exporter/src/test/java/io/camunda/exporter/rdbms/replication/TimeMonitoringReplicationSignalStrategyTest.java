@@ -159,18 +159,31 @@ class TimeMonitoringReplicationSignalStrategyTest {
     }
 
     @Test
-    void shouldReturnPauseWorstCaseWhenQuorumNotMet() {
-      // given - minSyncReplicas=2, only one replica reporting: unconditional, not gated by queue
-      // state, unlike LsnReplicationSignalStrategy
+    void shouldReturnPauseWorstCaseWhenQuorumNotMetAndQueueEmpty() {
+      // given - minSyncReplicas=2, only one replica reporting, and no queue-head signal available
       config.setMinSyncReplicas(2);
       final var strategy = createStrategy();
       final var statuses = List.of(new ReplicationLagStatus("r1", 1_000L, 0L));
 
-      // when - even with a non-empty queue, quorum loss alone is still pause-worthy for this mode
-      final Duration lag = strategy.computePauseLag(statuses, Optional.of(Duration.ofSeconds(1)));
+      // when
+      final Duration lag = strategy.computePauseLag(statuses, Optional.empty());
 
       // then
       assertThat(lag).isEqualTo(ReplicationSignalStrategy.PAUSE_WORST_CASE);
+    }
+
+    @Test
+    void shouldNotReturnPauseWorstCaseWhenQuorumNotMetButQueueNonEmpty() {
+      // given - minSyncReplicas=2, only one replica reporting, but queue-head age exists
+      config.setMinSyncReplicas(2);
+      final var strategy = createStrategy();
+      final var statuses = List.of(new ReplicationLagStatus("r1", 1_000L, 0L));
+
+      // when - quorum-shortage fallback is disabled while queue-head age is present
+      final Duration lag = strategy.computePauseLag(statuses, Optional.of(Duration.ofSeconds(1)));
+
+      // then - result comes from replica-reported lag, not from PAUSE_WORST_CASE
+      assertThat(lag).isEqualTo(Duration.ofMillis(1_000L));
     }
 
     @Test
