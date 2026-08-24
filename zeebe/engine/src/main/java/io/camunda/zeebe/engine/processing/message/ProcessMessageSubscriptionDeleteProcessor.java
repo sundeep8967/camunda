@@ -63,6 +63,14 @@ public final class ProcessMessageSubscriptionDeleteProcessor
       return;
     }
 
+    if (!subscription.isClosing()) {
+      // Not CLOSING: this ack arrived for a subscription that was never put into CLOSING state,
+      // meaning the DELETE was initiated by the suspend path (which omits the DELETING event to
+      // preserve the PI-side row as a resume manifest). The instance has already resumed and the
+      // subscription was reopened — deleting it here would corrupt the resumed instance.
+      return;
+    }
+
     stateWriter.appendFollowUpEvent(
         subscription.getKey(), ProcessMessageSubscriptionIntent.DELETED, subscription.getRecord());
 

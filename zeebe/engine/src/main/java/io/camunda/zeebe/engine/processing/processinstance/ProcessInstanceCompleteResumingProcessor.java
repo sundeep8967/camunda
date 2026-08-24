@@ -8,6 +8,7 @@
 package io.camunda.zeebe.engine.processing.processinstance;
 
 import io.camunda.zeebe.engine.processing.ExcludeAuthorizationCheck;
+import io.camunda.zeebe.engine.processing.message.command.SubscriptionCommandSender;
 import io.camunda.zeebe.engine.processing.streamprocessor.SuspensionAware;
 import io.camunda.zeebe.engine.processing.streamprocessor.SuspensionAware.SuspensionBehavior;
 import io.camunda.zeebe.engine.processing.streamprocessor.TypedRecordProcessor;
@@ -17,11 +18,14 @@ import io.camunda.zeebe.engine.processing.streamprocessor.writers.TypedRejection
 import io.camunda.zeebe.engine.processing.streamprocessor.writers.Writers;
 import io.camunda.zeebe.engine.processing.timer.DueDateTimerCheckScheduler;
 import io.camunda.zeebe.engine.state.immutable.ElementInstanceState;
+import io.camunda.zeebe.engine.state.immutable.ProcessMessageSubscriptionState;
 import io.camunda.zeebe.engine.state.immutable.SuspensionState;
+import io.camunda.zeebe.engine.state.instance.ElementInstance;
 import io.camunda.zeebe.protocol.impl.record.value.processinstance.ProcessInstanceRecord;
 import io.camunda.zeebe.protocol.record.RejectionType;
 import io.camunda.zeebe.protocol.record.intent.ProcessInstanceIntent;
 import io.camunda.zeebe.stream.api.records.TypedRecord;
+import java.util.ArrayDeque;
 import org.jspecify.annotations.NullMarked;
 
 /**
@@ -58,18 +62,24 @@ public final class ProcessInstanceCompleteResumingProcessor
   private final ElementInstanceState elementInstanceState;
   private final SuspensionState suspensionState;
   private final DueDateTimerCheckScheduler timerChecker;
+  private final ProcessMessageSubscriptionState processMessageSubscriptionState;
+  private final SubscriptionCommandSender subscriptionCommandSender;
 
   public ProcessInstanceCompleteResumingProcessor(
       final ElementInstanceState elementInstanceState,
       final SuspensionState suspensionState,
       final Writers writers,
-      final DueDateTimerCheckScheduler timerChecker) {
+      final DueDateTimerCheckScheduler timerChecker,
+      final ProcessMessageSubscriptionState processMessageSubscriptionState,
+      final SubscriptionCommandSender subscriptionCommandSender) {
     stateWriter = writers.state();
     sideEffectWriter = writers.sideEffect();
     rejectionWriter = writers.rejection();
     this.elementInstanceState = elementInstanceState;
     this.suspensionState = suspensionState;
     this.timerChecker = timerChecker;
+    this.processMessageSubscriptionState = processMessageSubscriptionState;
+    this.subscriptionCommandSender = subscriptionCommandSender;
   }
 
   @Override
@@ -93,6 +103,7 @@ public final class ProcessInstanceCompleteResumingProcessor
       return;
     }
 
+    reopenMessageSubscriptions(processInstanceKey);
     stateWriter.appendFollowUpEvent(
         processInstanceKey, ProcessInstanceIntent.RESUMED, elementInstance.getValue());
     // the instance is fully resumed now (the RESUMED applier clears the suspension marker), so
@@ -108,6 +119,60 @@ public final class ProcessInstanceCompleteResumingProcessor
   @Override
   public SuspensionBehavior suspensionBehavior(final TypedRecord<ProcessInstanceRecord> record) {
     return SuspensionBehavior.PROCESS;
+  }
+
+  /**
+   * Walks the element-instance tree BFS and re-opens message-side subscriptions for every {@code
+   * OPENED} process message subscription. Subscriptions in {@code OPENING} or {@code CLOSING} state
+   * are skipped: {@code OPENING} ones are mid-handshake (will complete normally), and {@code
+   * CLOSING} ones are being torn down concurrently.
+   *
+   * <p>Sends {@link io.camunda.zeebe.protocol.record.intent.MessageSubscriptionIntent#CREATE} to
+   * the message partition, sourcing all 13 fields from the stored {@link
+   * io.camunda.zeebe.protocol.impl.record.value.message.ProcessMessageSubscriptionRecord} (the
+   * suspend path kept it {@code OPENED} as a durable manifest). The message partition's {@link
+   * io.camunda.zeebe.engine.processing.message.MessageSubscriptionCreateProcessor} calls {@link
+   * io.camunda.zeebe.engine.processing.message.MessageCorrelator#correlateNextMessage} on creation,
+   * making TTL-correct pickup of buffered messages automatic. The ack-back {@code
+   * PROCESS_MESSAGE_SUBSCRIPTION.CREATE} command arrives at the PI side and is rejected (the row is
+   * {@code OPENED}, not {@code OPENING}) — the rejection is benign since the message-side
+   * subscription and its correlation are the goal, not the PI-side state transition.
+   */
+  private void reopenMessageSubscriptions(final long processInstanceKey) {
+    final var root = elementInstanceState.getInstance(processInstanceKey);
+    if (root == null) {
+      return;
+    }
+    final var queue = new ArrayDeque<ElementInstance>();
+    queue.add(root);
+    while (!queue.isEmpty()) {
+      final var elementInstance = queue.poll();
+      processMessageSubscriptionState.visitElementSubscriptions(
+          elementInstance.getKey(),
+          subscription -> {
+            if (!subscription.isOpening() && !subscription.isClosing()) {
+              final var record = subscription.getRecord();
+              subscriptionCommandSender.openMessageSubscription(
+                  record.getSubscriptionPartitionId(),
+                  record.getProcessInstanceKey(),
+                  record.getElementInstanceKey(),
+                  record.getProcessDefinitionKey(),
+                  record.getBpmnProcessIdBuffer(),
+                  record.getMessageNameBuffer(),
+                  record.getCorrelationKeyBuffer(),
+                  record.isInterrupting(),
+                  record.getTenantId(),
+                  record.getBusinessIdBuffer(),
+                  record.getElementIdBuffer(),
+                  record.getRootProcessInstanceKey(),
+                  record.getElementType());
+            }
+            return true;
+          });
+      elementInstanceState.getChildren(elementInstance.getKey()).stream()
+          .filter(child -> child.getValue().getProcessInstanceKey() == processInstanceKey)
+          .forEach(queue::add);
+    }
   }
 
   private void reject(final TypedRecord<ProcessInstanceRecord> command, final String reason) {

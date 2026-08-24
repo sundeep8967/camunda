@@ -24,6 +24,7 @@ import io.camunda.zeebe.engine.processing.streamprocessor.writers.Writers;
 import io.camunda.zeebe.engine.state.immutable.ElementInstanceState;
 import io.camunda.zeebe.engine.state.immutable.ProcessMessageSubscriptionState;
 import io.camunda.zeebe.engine.state.immutable.ProcessState;
+import io.camunda.zeebe.engine.state.immutable.SuspensionState;
 import io.camunda.zeebe.engine.state.message.ProcessMessageSubscription;
 import io.camunda.zeebe.engine.state.message.TransientPendingSubscriptionState;
 import io.camunda.zeebe.engine.state.message.TransientPendingSubscriptionState.PendingSubscription;
@@ -49,6 +50,9 @@ public final class ProcessMessageSubscriptionCorrelateProcessor
   private static final String ALREADY_CLOSING_MESSAGE =
       "Expected to correlate process message subscription with element key '%d' and message name '%s', "
           + "but it is already closing";
+  private static final String SUSPENDED_PI_MESSAGE =
+      "Expected to correlate process message subscription with element key '%d' and message name '%s', "
+          + "but the process instance is suspended";
 
   private final ProcessMessageSubscriptionState subscriptionState;
   private final TransientPendingSubscriptionState transientProcessMessageSubscriptionState;
@@ -58,6 +62,7 @@ public final class ProcessMessageSubscriptionCorrelateProcessor
   private final StateWriter stateWriter;
   private final TypedRejectionWriter rejectionWriter;
   private final SideEffectWriter sideEffectWriter;
+  private final SuspensionState suspensionState;
 
   private final EventHandle eventHandle;
 
@@ -73,6 +78,7 @@ public final class ProcessMessageSubscriptionCorrelateProcessor
     this.subscriptionCommandSender = subscriptionCommandSender;
     processState = processingState.getProcessState();
     elementInstanceState = processingState.getElementInstanceState();
+    suspensionState = processingState.getSuspensionState();
     stateWriter = writers.state();
     rejectionWriter = writers.rejection();
     sideEffectWriter = writers.sideEffect();
@@ -103,6 +109,15 @@ public final class ProcessMessageSubscriptionCorrelateProcessor
 
     } else if (subscription.isClosing()) {
       rejectCommand(command, RejectionType.INVALID_STATE, ALREADY_CLOSING_MESSAGE);
+      return;
+
+    } else if (suspensionState.isSuspended(record.getProcessInstanceKey())) {
+      // Race window: SUSPEND was processed (message-side subscriptions are being deleted) but
+      // this CORRELATE was already in flight from the message partition. Reject it so the
+      // message-side lock is released and the message can correlate to another active instance,
+      // or return 404 if no other subscriber exists. On resume, reopened subscriptions pick up
+      // any still-valid buffered messages through the normal CREATE→correlateNextMessage path.
+      rejectCommand(command, RejectionType.INVALID_STATE, SUSPENDED_PI_MESSAGE);
       return;
 
     } else if (hasAlreadyBeenCorrelated(record, subscription)) {
@@ -227,6 +242,10 @@ public final class ProcessMessageSubscriptionCorrelateProcessor
   @Override
   public SuspensionBehavior suspensionBehavior(
       final TypedRecord<ProcessMessageSubscriptionRecord> record) {
-    return SuspensionBehavior.BUFFER;
+    // Suspended instances have no message-side subscriptions, so CORRELATE commands for them
+    // only arrive during the narrow suspend/close race window. Process unconditionally and
+    // let the explicit isSuspended check inside processRecord reject those cases — buffering
+    // would keep the message-partition lock held indefinitely while the instance is suspended.
+    return SuspensionBehavior.PROCESS;
   }
 }

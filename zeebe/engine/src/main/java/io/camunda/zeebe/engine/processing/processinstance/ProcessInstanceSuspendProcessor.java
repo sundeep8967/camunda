@@ -11,6 +11,7 @@ import io.camunda.security.core.auth.RequiredAuthorization;
 import io.camunda.zeebe.engine.processing.Rejection;
 import io.camunda.zeebe.engine.processing.identity.AuthorizationRejectionMapper;
 import io.camunda.zeebe.engine.processing.identity.authorization.CslAuthorizationCheck;
+import io.camunda.zeebe.engine.processing.message.command.SubscriptionCommandSender;
 import io.camunda.zeebe.engine.processing.streamprocessor.SuspensionAware;
 import io.camunda.zeebe.engine.processing.streamprocessor.SuspensionAware.SuspensionBehavior;
 import io.camunda.zeebe.engine.processing.streamprocessor.TypedRecordProcessor;
@@ -20,6 +21,7 @@ import io.camunda.zeebe.engine.processing.streamprocessor.writers.TypedResponseW
 import io.camunda.zeebe.engine.processing.streamprocessor.writers.Writers;
 import io.camunda.zeebe.engine.state.immutable.AsyncRequestState;
 import io.camunda.zeebe.engine.state.immutable.ElementInstanceState;
+import io.camunda.zeebe.engine.state.immutable.ProcessMessageSubscriptionState;
 import io.camunda.zeebe.engine.state.immutable.ProcessingState;
 import io.camunda.zeebe.engine.state.immutable.SuspensionState;
 import io.camunda.zeebe.engine.state.instance.ElementInstance;
@@ -31,6 +33,7 @@ import io.camunda.zeebe.protocol.record.mapper.AuthzModelMapper;
 import io.camunda.zeebe.protocol.record.value.AuthorizationResourceType;
 import io.camunda.zeebe.protocol.record.value.PermissionType;
 import io.camunda.zeebe.stream.api.records.TypedRecord;
+import java.util.ArrayDeque;
 
 public final class ProcessInstanceSuspendProcessor
     implements TypedRecordProcessor<ProcessInstanceRecord>, SuspensionAware<ProcessInstanceRecord> {
@@ -53,11 +56,14 @@ public final class ProcessInstanceSuspendProcessor
   private final AsyncRequestState asyncRequestState;
   private final SuspensionState suspensionState;
   private final ProcessInstanceSuspensionJobBehavior suspensionJobBehavior;
+  private final ProcessMessageSubscriptionState processMessageSubscriptionState;
+  private final SubscriptionCommandSender subscriptionCommandSender;
 
   public ProcessInstanceSuspendProcessor(
       final ProcessingState processingState,
       final Writers writers,
-      final CslAuthorizationCheck cslCheck) {
+      final CslAuthorizationCheck cslCheck,
+      final SubscriptionCommandSender subscriptionCommandSender) {
     elementInstanceState = processingState.getElementInstanceState();
     responseWriter = writers.response();
     stateWriter = writers.state();
@@ -68,6 +74,8 @@ public final class ProcessInstanceSuspendProcessor
     suspensionJobBehavior =
         new ProcessInstanceSuspensionJobBehavior(
             elementInstanceState, processingState.getJobState(), stateWriter);
+    processMessageSubscriptionState = processingState.getProcessMessageSubscriptionState();
+    this.subscriptionCommandSender = subscriptionCommandSender;
   }
 
   @Override
@@ -82,6 +90,7 @@ public final class ProcessInstanceSuspendProcessor
     // Park jobs before the instance-level SUSPENDED event so suspension is complete when the
     // marker is written. A later SUSPENDING intermediate state can chunk this work first.
     suspensionJobBehavior.suspendJobs(command.getKey());
+    closeOpenMessageSubscriptions(command.getKey());
     stateWriter.appendFollowUpEvent(command.getKey(), ProcessInstanceIntent.SUSPENDED, value);
     responseWriter.writeAcceptedResponseOnCommand(
         command.getKey(), ProcessInstanceIntent.SUSPENDED, value, command);
@@ -147,6 +156,49 @@ public final class ProcessInstanceSuspendProcessor
     }
 
     return true;
+  }
+
+  /**
+   * Walks the element-instance tree BFS and sends {@link
+   * io.camunda.zeebe.protocol.record.intent.MessageSubscriptionIntent#DELETE} to the message
+   * partition for every {@code OPENED} process message subscription. The PI-side {@link
+   * io.camunda.zeebe.protocol.record.intent.ProcessMessageSubscriptionIntent} row is intentionally
+   * left in {@code OPENED} state as a durable manifest for re-subscribing on resume. {@link
+   * ProcessMessageSubscriptionDeleteProcessor} skips ack-backs for rows that are not {@code
+   * CLOSING}, preventing the suspend-close from destroying the resume manifest.
+   *
+   * <p>Subscriptions in {@code OPENING} or {@code CLOSING} state are skipped: {@code OPENING} ones
+   * are mid-handshake (no message-side row to close yet), and {@code CLOSING} ones are already
+   * being torn down by the normal unsubscribe flow.
+   */
+  private void closeOpenMessageSubscriptions(final long processInstanceKey) {
+    final var root = elementInstanceState.getInstance(processInstanceKey);
+    if (root == null) {
+      return;
+    }
+    final var queue = new ArrayDeque<ElementInstance>();
+    queue.add(root);
+    while (!queue.isEmpty()) {
+      final var elementInstance = queue.poll();
+      processMessageSubscriptionState.visitElementSubscriptions(
+          elementInstance.getKey(),
+          subscription -> {
+            if (!subscription.isOpening() && !subscription.isClosing()) {
+              final var record = subscription.getRecord();
+              subscriptionCommandSender.closeMessageSubscription(
+                  record.getSubscriptionPartitionId(),
+                  record.getProcessInstanceKey(),
+                  record.getElementInstanceKey(),
+                  record.getProcessDefinitionKey(),
+                  record.getMessageNameBuffer(),
+                  record.getTenantId());
+            }
+            return true;
+          });
+      elementInstanceState.getChildren(elementInstance.getKey()).stream()
+          .filter(child -> child.getValue().getProcessInstanceKey() == processInstanceKey)
+          .forEach(queue::add);
+    }
   }
 
   /**
