@@ -167,9 +167,6 @@ public class HealthConfigurationInitializer
         if (activeProfiles.contains(Profile.OPERATE.getId())) {
           healthIndicators.add("indicesCheck");
         }
-        if (activeProfiles.contains(Profile.TASKLIST.getId())) {
-          healthIndicators.add("searchEngineCheck");
-        }
       }
     }
 

@@ -99,7 +99,7 @@ class HealthConfigurationInitializerTest {
       // then — only broker indicators, no ES-dependent indicators from webapp profiles
       assertThat(indicators)
           .containsExactly("brokerReady", "nodeIdProviderReady")
-          .doesNotContain("indicesCheck", "searchEngineCheck");
+          .doesNotContain("indicesCheck");
     }
 
     @ParameterizedTest
@@ -124,7 +124,7 @@ class HealthConfigurationInitializerTest {
       final var indicators = initializer.collectLivenessGroupHealthIndicators(profiles);
 
       // then — must not contain any ES-dependent indicators
-      assertThat(indicators).doesNotContain("indicesCheck", "searchEngineCheck");
+      assertThat(indicators).doesNotContain("indicesCheck");
     }
   }
 
@@ -208,22 +208,6 @@ class HealthConfigurationInitializerTest {
     }
 
     @Test
-    void shouldIncludeSearchEngineCheckForTasklistWithES() {
-      // given
-      withElasticsearchSecondaryStorage();
-      withHttpGatewayEnabled();
-      final var profiles = List.of(Profile.TASKLIST.getId());
-
-      // when
-      final var indicators =
-          initializer.collectReadinessGroupHealthIndicators(profiles, environment);
-
-      // then
-      assertThat(indicators)
-          .contains("readinessState", "searchEngineCheck", "schemaReadinessCheck");
-    }
-
-    @Test
     void shouldNotIncludeEsIndicatorsWithRdbms() {
       // given
       withRdbmsSecondaryStorage();
@@ -236,7 +220,7 @@ class HealthConfigurationInitializerTest {
       // then
       assertThat(indicators)
           .contains("readinessState")
-          .doesNotContain("indicesCheck", "searchEngineCheck", "schemaReadinessCheck");
+          .doesNotContain("indicesCheck", "schemaReadinessCheck");
     }
 
     @Test
