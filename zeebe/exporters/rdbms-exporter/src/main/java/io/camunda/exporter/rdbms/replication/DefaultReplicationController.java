@@ -16,6 +16,7 @@ import io.camunda.zeebe.util.VisibleForTesting;
 import java.time.Duration;
 import java.time.InstantSource;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -144,7 +145,7 @@ public final class DefaultReplicationController implements ReplicationController
       final long confirmedMarker = strategy.computeConfirmedMarker(statuses);
       final QueuedPosition confirmedEntry = drainConfirmed(confirmedMarker);
 
-      final Duration queueHeadAge = queueHeadAge();
+      final Optional<Duration> queueHeadAge = queueHeadAge();
       final Duration pauseLag = strategy.computePauseLag(statuses, queueHeadAge);
 
       log.debug(
@@ -181,14 +182,17 @@ public final class DefaultReplicationController implements ReplicationController
     }
   }
 
-  /** The age of the oldest still-unconfirmed queued entry, or {@link Duration#ZERO} if empty. */
+  /**
+   * The age of the oldest still-unconfirmed queued entry, or {@link Optional#empty()} if the queue
+   * is empty.
+   */
   @VisibleForTesting
-  Duration queueHeadAge() {
+  Optional<Duration> queueHeadAge() {
     final QueuedPosition head = pendingEntries.peek();
     if (head == null) {
-      return Duration.ZERO;
+      return Optional.empty();
     }
-    return Duration.ofMillis(clock.millis() - head.enqueueTimeMs());
+    return Optional.of(Duration.ofMillis(clock.millis() - head.enqueueTimeMs()));
   }
 
   /**

@@ -16,6 +16,7 @@ import io.camunda.db.rdbms.read.replication.ReplicationLsnStatus;
 import io.camunda.exporter.rdbms.ExporterConfiguration.ReplicationConfiguration;
 import java.time.Duration;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -129,18 +130,37 @@ class LsnReplicationSignalStrategyTest {
   class ComputePauseLagTest {
 
     @Test
-    void shouldReturnPauseWorstCaseWhenQuorumNotMet() {
-      // given
+    void shouldReturnPauseWorstCaseWhenQuorumNotMetAndQueueEmpty() {
+      // given - quorum lost, and the queue is empty so there's no other lag signal to judge
+      // staleness by
       config.setMinSyncReplicas(2);
       final var strategy = createStrategy();
 
       // when
       final Duration lag =
           strategy.computePauseLag(
-              List.of(new ReplicationLsnStatus(10L, "replica-1", 0L)), Duration.ofSeconds(3));
+              List.of(new ReplicationLsnStatus(10L, "replica-1", 0L)), Optional.empty());
 
       // then
       assertThat(lag).isEqualTo(ReplicationSignalStrategy.PAUSE_WORST_CASE);
+    }
+
+    @Test
+    void shouldNotReturnPauseWorstCaseWhenQuorumNotMetButQueueNonEmpty() {
+      // given - quorum lost, but a position is still queued: its own queue-head-age already
+      // signals staleness, so a replica shortage alone must not additionally force an immediate
+      // pause on top of that
+      config.setMinSyncReplicas(2);
+      final var strategy = createStrategy();
+
+      // when
+      final Duration lag =
+          strategy.computePauseLag(
+              List.of(new ReplicationLsnStatus(10L, "replica-1", 0L)),
+              Optional.of(Duration.ofSeconds(3)));
+
+      // then
+      assertThat(lag).isEqualTo(Duration.ofSeconds(3));
     }
 
     @Test
@@ -151,10 +171,23 @@ class LsnReplicationSignalStrategyTest {
       final var statuses = List.of(new ReplicationLsnStatus(10L, "replica-1", 0L));
 
       // when
-      final Duration lag = strategy.computePauseLag(statuses, Duration.ofSeconds(7));
+      final Duration lag = strategy.computePauseLag(statuses, Optional.of(Duration.ofSeconds(7)));
 
       // then
       assertThat(lag).isEqualTo(Duration.ofSeconds(7));
+    }
+
+    @Test
+    void shouldReturnZeroWhenQuorumMetAndQueueEmpty() {
+      // given - nothing queued and quorum is fine: no lag signal at all
+      final var strategy = createStrategy();
+      final var statuses = List.of(new ReplicationLsnStatus(10L, "replica-1", 0L));
+
+      // when
+      final Duration lag = strategy.computePauseLag(statuses, Optional.empty());
+
+      // then
+      assertThat(lag).isEqualTo(Duration.ZERO);
     }
   }
 }

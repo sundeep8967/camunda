@@ -287,9 +287,9 @@ class DefaultReplicationControllerTest {
     when(strategy.captureFlushMarker()).thenReturn(10L);
     replicationController.onFlush(100L);
 
-    // when - the strategy reports quorum not met (PAUSE_WORST_CASE), regardless of queue state.
-    // Unlike the old LSN controller (which only treated quorum loss as pause-worthy while its
-    // queue was empty), the unified controller pauses unconditionally.
+    // when - the strategy reports PAUSE_WORST_CASE, regardless of queue state; the shared
+    // controller always trusts whatever the strategy decides, whether or not a particular
+    // strategy's own logic happens to be gated by queue emptiness.
     when(strategy.computePauseLag(any(), any()))
         .thenReturn(ReplicationSignalStrategy.PAUSE_WORST_CASE);
     replicationController.checkReplication();
@@ -435,15 +435,15 @@ class DefaultReplicationControllerTest {
   class QueueHeadAgeTest {
 
     @Test
-    void shouldReturnZeroWhenQueueIsEmpty() {
+    void shouldReturnEmptyWhenQueueIsEmpty() {
       // given
       final var replicationController = createController();
 
       // when
       final var age = replicationController.queueHeadAge();
 
-      // then
-      assertThat(age).isEqualTo(Duration.ZERO);
+      // then - distinct from "an entry that is zero milliseconds old"
+      assertThat(age).isEmpty();
     }
 
     @Test
@@ -459,7 +459,7 @@ class DefaultReplicationControllerTest {
       final var age = replicationController.queueHeadAge();
 
       // then
-      assertThat(age).isEqualTo(Duration.ofMillis(3_000));
+      assertThat(age).contains(Duration.ofMillis(3_000));
     }
 
     @Test
@@ -477,7 +477,7 @@ class DefaultReplicationControllerTest {
       final var age = replicationController.queueHeadAge();
 
       // then - age is measured from head (t=0), not tail (t=5000)
-      assertThat(age).isEqualTo(Duration.ofMillis(6_000));
+      assertThat(age).contains(Duration.ofMillis(6_000));
     }
   }
 }

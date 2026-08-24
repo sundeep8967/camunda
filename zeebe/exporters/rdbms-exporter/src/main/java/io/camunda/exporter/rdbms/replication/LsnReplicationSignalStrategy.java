@@ -14,6 +14,7 @@ import io.camunda.exporter.rdbms.ExporterConfiguration.ReplicationConfiguration;
 import java.time.Duration;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Uses the log sequence number (LSN) of the database to compare the replication status of the
@@ -66,14 +67,21 @@ public final class LsnReplicationSignalStrategy implements ReplicationSignalStra
 
   /**
    * This mode has no per-replica lag figure of its own, so the pause decision falls back to {@code
-   * queueHeadAge} - how long the oldest still-unconfirmed position has been waiting.
+   * queueHeadAge} - how long the oldest still-unconfirmed position has been waiting, or {@link
+   * Duration#ZERO} if nothing is queued. Quorum loss is only treated as pause-worthy while the
+   * queue is empty ({@code queueHeadAge} absent): if a position is still pending, its own
+   * queue-head-age lag signal already covers the "replication looks unhealthy" case, so a replica
+   * shortage alone doesn't force an immediate pause on top of that - it does once the queue drains
+   * and there is no other signal left to judge staleness by.
    */
   @Override
   public Duration computePauseLag(
-      final List<? extends ReplicationStatus> statuses, final Duration queueHeadAge) {
-    if (statuses.size() < config.getMinSyncReplicas()) {
+      final List<? extends ReplicationStatus> statuses, final Optional<Duration> queueHeadAge) {
+    final boolean quorumNotMet =
+        queueHeadAge.isEmpty() && statuses.size() < config.getMinSyncReplicas();
+    if (quorumNotMet) {
       return PAUSE_WORST_CASE;
     }
-    return queueHeadAge;
+    return queueHeadAge.orElse(Duration.ZERO);
   }
 }

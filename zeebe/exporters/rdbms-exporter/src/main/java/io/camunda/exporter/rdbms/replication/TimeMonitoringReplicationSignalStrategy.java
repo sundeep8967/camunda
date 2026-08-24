@@ -14,6 +14,7 @@ import io.camunda.exporter.rdbms.ExporterConfiguration.ReplicationConfiguration;
 import java.time.Duration;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Monitors the replication lag reported directly by the database (in milliseconds). Unlike {@link
@@ -73,7 +74,7 @@ public final class TimeMonitoringReplicationSignalStrategy implements Replicatio
    */
   @Override
   public Duration computePauseLag(
-      final List<? extends ReplicationStatus> statuses, final Duration queueHeadAge) {
+      final List<? extends ReplicationStatus> statuses, final Optional<Duration> queueHeadAge) {
     if (statuses.size() < config.getMinSyncReplicas()) {
       return PAUSE_WORST_CASE;
     }

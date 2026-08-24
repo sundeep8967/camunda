@@ -16,6 +16,7 @@ import io.camunda.exporter.rdbms.ExporterConfiguration.ReplicationConfiguration;
 import java.time.Duration;
 import java.time.InstantSource;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -75,7 +76,8 @@ class DelayReplicationSignalStrategyTest {
     final var strategy = createStrategy();
 
     // when / then
-    assertThat(strategy.computePauseLag(List.of(), Duration.ZERO)).isEqualTo(Duration.ZERO);
-    assertThat(strategy.computePauseLag(List.of(), Duration.ofDays(365))).isEqualTo(Duration.ZERO);
+    assertThat(strategy.computePauseLag(List.of(), Optional.empty())).isEqualTo(Duration.ZERO);
+    assertThat(strategy.computePauseLag(List.of(), Optional.of(Duration.ofDays(365))))
+        .isEqualTo(Duration.ZERO);
   }
 }

@@ -16,6 +16,7 @@ import io.camunda.db.rdbms.read.replication.ReplicationLagStatus;
 import io.camunda.exporter.rdbms.ExporterConfiguration.ReplicationConfiguration;
 import java.time.Duration;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -151,7 +152,7 @@ class TimeMonitoringReplicationSignalStrategyTest {
       final var strategy = createStrategy();
 
       // when
-      final Duration lag = strategy.computePauseLag(List.of(), Duration.ZERO);
+      final Duration lag = strategy.computePauseLag(List.of(), Optional.empty());
 
       // then
       assertThat(lag).isEqualTo(ReplicationSignalStrategy.PAUSE_WORST_CASE);
@@ -165,8 +166,8 @@ class TimeMonitoringReplicationSignalStrategyTest {
       final var strategy = createStrategy();
       final var statuses = List.of(new ReplicationLagStatus("r1", 1_000L, 0L));
 
-      // when
-      final Duration lag = strategy.computePauseLag(statuses, Duration.ZERO);
+      // when - even with a non-empty queue, quorum loss alone is still pause-worthy for this mode
+      final Duration lag = strategy.computePauseLag(statuses, Optional.of(Duration.ofSeconds(1)));
 
       // then
       assertThat(lag).isEqualTo(ReplicationSignalStrategy.PAUSE_WORST_CASE);
@@ -186,7 +187,7 @@ class TimeMonitoringReplicationSignalStrategyTest {
               new ReplicationLagStatus("r3", 10_000L));
 
       // when
-      final Duration lag = strategy.computePauseLag(statuses, Duration.ZERO);
+      final Duration lag = strategy.computePauseLag(statuses, Optional.empty());
 
       // then - top 2 by lowest lag are r1 (5_000) and r3 (10_000); the straggler r2 (20_000) is
       // outside the required quorum and must not be able to force a pause on its own
@@ -200,7 +201,7 @@ class TimeMonitoringReplicationSignalStrategyTest {
       final var statuses = List.of(new ReplicationLagStatus("r1", null));
 
       // when
-      final Duration lag = strategy.computePauseLag(statuses, Duration.ZERO);
+      final Duration lag = strategy.computePauseLag(statuses, Optional.empty());
 
       // then
       assertThat(lag).isEqualTo(Duration.ofMillis(Long.MAX_VALUE));
@@ -209,16 +210,17 @@ class TimeMonitoringReplicationSignalStrategyTest {
     @Test
     void shouldIgnoreQueueHeadAge() {
       // given - this signal has its own replica-reported lag, so queueHeadAge must not influence
-      // the result at all
+      // the result at all, whether empty or present
       final var strategy = createStrategy();
       final var statuses = List.of(new ReplicationLagStatus("r1", 5_000L));
 
       // when
-      final Duration lagWithSmallQueueAge = strategy.computePauseLag(statuses, Duration.ZERO);
-      final Duration lagWithHugeQueueAge = strategy.computePauseLag(statuses, Duration.ofDays(365));
+      final Duration lagWithNoQueueAge = strategy.computePauseLag(statuses, Optional.empty());
+      final Duration lagWithHugeQueueAge =
+          strategy.computePauseLag(statuses, Optional.of(Duration.ofDays(365)));
 
       // then
-      assertThat(lagWithSmallQueueAge)
+      assertThat(lagWithNoQueueAge)
           .isEqualTo(lagWithHugeQueueAge)
           .isEqualTo(Duration.ofMillis(5_000L));
     }

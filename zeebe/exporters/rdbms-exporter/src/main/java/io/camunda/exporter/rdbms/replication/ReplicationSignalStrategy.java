@@ -10,6 +10,7 @@ package io.camunda.exporter.rdbms.replication;
 import io.camunda.db.rdbms.read.replication.ReplicationStatus;
 import java.time.Duration;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * The two decision points that vary between replication signals (LSN, reported lag, a fixed delay);
@@ -55,9 +56,12 @@ public interface ReplicationSignalStrategy {
   /**
    * Decision point 2 ("when to pause"): the current lag, compared by the shared controller against
    * {@code maxLag}. {@code queueHeadAge} is the age of the oldest still-unconfirmed queued entry,
-   * computed generically from the shared controller's own clock; a strategy may fold it in (when it
-   * has no other lag signal of its own) or ignore it (when it does). Returns {@link
-   * #PAUSE_WORST_CASE} when quorum is not met.
+   * computed generically from the shared controller's own clock, or {@link Optional#empty()} when
+   * the queue is empty - distinct from "an entry that is zero milliseconds old" - so a strategy can
+   * gate its own quorum handling on queue emptiness the same way a caller reading the queue
+   * directly would. A strategy may fold this value in (when it has no other lag signal of its own)
+   * or ignore it (when it does). Returns {@link #PAUSE_WORST_CASE} when quorum is not met.
    */
-  Duration computePauseLag(List<? extends ReplicationStatus> statuses, Duration queueHeadAge);
+  Duration computePauseLag(
+      List<? extends ReplicationStatus> statuses, Optional<Duration> queueHeadAge);
 }

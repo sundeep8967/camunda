@@ -12,6 +12,7 @@ import io.camunda.exporter.rdbms.ExporterConfiguration.ReplicationConfiguration;
 import java.time.Duration;
 import java.time.InstantSource;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Delays acknowledgment of flushed positions by a fixed duration instead of observing any actual
@@ -49,7 +50,7 @@ public final class DelayReplicationSignalStrategy implements ReplicationSignalSt
   /** Never pauses - there is no replication signal to judge the exporter out of sync by. */
   @Override
   public Duration computePauseLag(
-      final List<? extends ReplicationStatus> statuses, final Duration queueHeadAge) {
+      final List<? extends ReplicationStatus> statuses, final Optional<Duration> queueHeadAge) {
     return Duration.ZERO;
   }
 }
