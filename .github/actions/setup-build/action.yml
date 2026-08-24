@@ -159,7 +159,7 @@ runs:
   # never depend on this path resolving.
   - name: Import Harbor Secrets
     if: >-
-      steps.is-fork.outputs.is-fork != 'true' &&
+      steps.checks.outputs.is-fork != 'true' &&
       inputs.harbor == 'true'
     id: harbor-secrets
     uses: hashicorp/vault-action@892a26828f195e65540a40b4768ae4571f51ebfc # v4.0.0
@@ -306,8 +306,8 @@ runs:
       inputs.harbor == 'true'
     uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60 # v4.0.0
     env:
-      DOCKER_USERNAME: ${{ steps.secrets.outputs.harbor-username }}
-      DOCKER_PASSWORD: ${{ steps.secrets.outputs.harbor-password }}
+      DOCKER_USERNAME: ${{ steps.harbor-secrets.outputs.harbor-username }}
+      DOCKER_PASSWORD: ${{ steps.harbor-secrets.outputs.harbor-password }}
     with:
       max_attempts: 3
       retry_wait_seconds: 10
