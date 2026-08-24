@@ -69,6 +69,23 @@ class ReplicationLagProviderFactoryTest {
   }
 
   @Test
+  void shouldDeriveLagProviderFromLsnProviderForAuroraMySQL() {
+    // given
+    final var vendorDatabaseProperties = mock(VendorDatabaseProperties.class);
+    when(vendorDatabaseProperties.databaseId()).thenReturn("mysql");
+    final var mapper = mock(ReplicationStatusMapper.class);
+    when(mapper.isAurora()).thenReturn(true);
+    when(mapper.isAuroraGlobalDatabase()).thenReturn(true);
+    final var factory = new ReplicationLagProviderFactory(vendorDatabaseProperties, mapper);
+
+    // when
+    final var provider = factory.create();
+
+    // then
+    assertThat(provider).isInstanceOf(LsnBackedReplicationLagProvider.class);
+  }
+
+  @Test
   void shouldFailForPlainMysqlWithoutAurora() {
     // given
     final var vendorDatabaseProperties = mock(VendorDatabaseProperties.class);
