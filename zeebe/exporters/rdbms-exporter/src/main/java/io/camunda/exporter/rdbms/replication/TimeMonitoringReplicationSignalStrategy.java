@@ -9,7 +9,6 @@ package io.camunda.exporter.rdbms.replication;
 
 import io.camunda.db.rdbms.read.replication.ReplicationLagProvider;
 import io.camunda.db.rdbms.read.replication.ReplicationLagStatus;
-import io.camunda.db.rdbms.read.replication.ReplicationStatus;
 import io.camunda.exporter.rdbms.ExporterConfiguration.ReplicationConfiguration;
 import java.time.Duration;
 import java.util.Comparator;
@@ -23,7 +22,8 @@ import java.util.Optional;
  * the underlying signal goes stale, since it doesn't drift with the wall clock the way "now minus a
  * relative lag" would.
  */
-public final class TimeMonitoringReplicationSignalStrategy implements ReplicationSignalStrategy {
+public final class TimeMonitoringReplicationSignalStrategy
+    implements ReplicationSignalStrategy<ReplicationLagStatus> {
 
   private final ReplicationLagProvider statusProvider;
   private final ReplicationConfiguration config;
@@ -51,12 +51,11 @@ public final class TimeMonitoringReplicationSignalStrategy implements Replicatio
    * {@link #UNCONFIRMED} when quorum isn't met.
    */
   @Override
-  public long computeConfirmedMarker(final List<? extends ReplicationStatus> statuses) {
+  public long computeConfirmedMarker(final List<ReplicationLagStatus> statuses) {
     if (statuses.size() < config.getMinSyncReplicas()) {
       return UNCONFIRMED;
     }
     return statuses.stream()
-        .map(ReplicationLagStatus.class::cast)
         .map(s -> s.replicatedUntilMs() != null ? s.replicatedUntilMs() : UNCONFIRMED)
         .sorted(Comparator.<Long>naturalOrder().reversed())
         .limit(config.getMinSyncReplicas())
@@ -74,7 +73,7 @@ public final class TimeMonitoringReplicationSignalStrategy implements Replicatio
    */
   @Override
   public Duration computePauseLag(
-      final List<? extends ReplicationStatus> statuses, final Optional<Duration> queueHeadAge) {
+      final List<ReplicationLagStatus> statuses, final Optional<Duration> queueHeadAge) {
     if (statuses.size() < config.getMinSyncReplicas()) {
       return PAUSE_WORST_CASE;
     }

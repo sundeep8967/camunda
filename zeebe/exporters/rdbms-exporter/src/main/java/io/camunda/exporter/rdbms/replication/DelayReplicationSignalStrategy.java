@@ -7,7 +7,7 @@
  */
 package io.camunda.exporter.rdbms.replication;
 
-import io.camunda.db.rdbms.read.replication.ReplicationStatus;
+import io.camunda.db.rdbms.read.replication.ReplicationLagStatus;
 import io.camunda.exporter.rdbms.ExporterConfiguration.ReplicationConfiguration;
 import java.time.Duration;
 import java.time.InstantSource;
@@ -20,7 +20,8 @@ import java.util.Optional;
  * captured release time ({@code now + delay}, at flush time) is at or before the current time at
  * check time; the exporter never pauses, since there is no signal to judge it out of sync by.
  */
-public final class DelayReplicationSignalStrategy implements ReplicationSignalStrategy {
+public final class DelayReplicationSignalStrategy
+    implements ReplicationSignalStrategy<ReplicationLagStatus> {
 
   private final ReplicationConfiguration config;
   private final InstantSource clock;
@@ -37,20 +38,20 @@ public final class DelayReplicationSignalStrategy implements ReplicationSignalSt
   }
 
   @Override
-  public List<? extends ReplicationStatus> fetchStatuses() {
+  public List<ReplicationLagStatus> fetchStatuses() {
     return List.of();
   }
 
   /** Ignores {@code statuses} - there is no replica signal, only the passage of time. */
   @Override
-  public long computeConfirmedMarker(final List<? extends ReplicationStatus> statuses) {
+  public long computeConfirmedMarker(final List<ReplicationLagStatus> statuses) {
     return clock.millis();
   }
 
   /** Never pauses - there is no replication signal to judge the exporter out of sync by. */
   @Override
   public Duration computePauseLag(
-      final List<? extends ReplicationStatus> statuses, final Optional<Duration> queueHeadAge) {
+      final List<ReplicationLagStatus> statuses, final Optional<Duration> queueHeadAge) {
     return Duration.ZERO;
   }
 

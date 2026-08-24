@@ -17,7 +17,7 @@ import java.util.Optional;
  * everything else - the queue, debouncing, pausing, scheduling, metrics - is identical regardless
  * of signal and lives on {@link DefaultReplicationController}.
  */
-public interface ReplicationSignalStrategy {
+public interface ReplicationSignalStrategy<T extends ReplicationStatus> {
 
   /**
    * Sentinel meaning "nothing is confirmable right now" (provider unhealthy, or quorum not met).
@@ -44,26 +44,25 @@ public interface ReplicationSignalStrategy {
    * both decision methods below and to metrics recording, so there is exactly one round trip per
    * check regardless of which strategy is wired in.
    */
-  List<? extends ReplicationStatus> fetchStatuses();
+  List<T> fetchStatuses();
 
   /**
-   * Decision point 1 ("when to acknowledge"): the confirmation threshold. An entry is confirmed
-   * once {@code entry.marker() <= computeConfirmedMarker(statuses)}. Returns {@link #UNCONFIRMED}
-   * when nothing should be confirmed this round.
+   * When to acknowledge an exporter position. An entry is confirmed once {@code entry.marker() <=
+   * computeConfirmedMarker(statuses)}. Returns {@link #UNCONFIRMED} when nothing should be
+   * confirmed this round.
    */
-  long computeConfirmedMarker(List<? extends ReplicationStatus> statuses);
+  long computeConfirmedMarker(List<T> statuses);
 
   /**
-   * Decision point 2 ("when to pause"): the current lag, compared by the shared controller against
-   * {@code maxLag}. {@code queueHeadAge} is the age of the oldest still-unconfirmed queued entry,
-   * computed generically from the shared controller's own clock, or {@link Optional#empty()} when
-   * the queue is empty - distinct from "an entry that is zero milliseconds old" - so a strategy can
-   * gate its own quorum handling on queue emptiness the same way a caller reading the queue
-   * directly would. A strategy may fold this value in (when it has no other lag signal of its own)
-   * or ignore it (when it does). Returns {@link #PAUSE_WORST_CASE} when quorum is not met.
+   * When to pause: the current lag, compared by the shared controller against {@code maxLag}.
+   * {@code queueHeadAge} is the age of the oldest still-unconfirmed queued entry, computed
+   * generically from the shared controller's own clock, or {@link Optional#empty()} when the queue
+   * is empty - distinct from "an entry that is zero milliseconds old" - so a strategy can gate its
+   * own quorum handling on queue emptiness the same way a caller reading the queue directly would.
+   * A strategy may fold this value in (when it has no other lag signal of its own) or ignore it
+   * (when it does). Returns {@link #PAUSE_WORST_CASE} when quorum is not met.
    */
-  Duration computePauseLag(
-      List<? extends ReplicationStatus> statuses, Optional<Duration> queueHeadAge);
+  Duration computePauseLag(List<T> statuses, Optional<Duration> queueHeadAge);
 
   /**
    * The delay before the next periodic check. Defaults to {@code pollingInterval} unchanged;

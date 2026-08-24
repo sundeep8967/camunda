@@ -9,7 +9,6 @@ package io.camunda.exporter.rdbms.replication;
 
 import io.camunda.db.rdbms.read.replication.ReplicationLsnProvider;
 import io.camunda.db.rdbms.read.replication.ReplicationLsnStatus;
-import io.camunda.db.rdbms.read.replication.ReplicationStatus;
 import io.camunda.exporter.rdbms.ExporterConfiguration.ReplicationConfiguration;
 import java.time.Duration;
 import java.util.Comparator;
@@ -22,7 +21,8 @@ import java.util.Optional;
  * the required quorum of replicas has reached the LSN captured at flush time, which guarantees that
  * no data will be lost in case of a failover.
  */
-public final class LsnReplicationSignalStrategy implements ReplicationSignalStrategy {
+public final class LsnReplicationSignalStrategy
+    implements ReplicationSignalStrategy<ReplicationLsnStatus> {
 
   private final ReplicationLsnProvider lsnProvider;
   private final ReplicationConfiguration config;
@@ -49,12 +49,11 @@ public final class LsnReplicationSignalStrategy implements ReplicationSignalStra
    * position, or if quorum isn't met.
    */
   @Override
-  public long computeConfirmedMarker(final List<? extends ReplicationStatus> statuses) {
+  public long computeConfirmedMarker(final List<ReplicationLsnStatus> statuses) {
     if (statuses.size() < config.getMinSyncReplicas()) {
       return UNCONFIRMED;
     }
     return statuses.stream()
-        .map(ReplicationLsnStatus.class::cast)
         .map(ReplicationLsnStatus::logStatus)
         .sorted(Comparator.<Long>naturalOrder().reversed())
         .limit(config.getMinSyncReplicas())
@@ -73,7 +72,7 @@ public final class LsnReplicationSignalStrategy implements ReplicationSignalStra
    */
   @Override
   public Duration computePauseLag(
-      final List<? extends ReplicationStatus> statuses, final Optional<Duration> queueHeadAge) {
+      final List<ReplicationLsnStatus> statuses, final Optional<Duration> queueHeadAge) {
     final boolean quorumNotMet =
         queueHeadAge.isEmpty() && statuses.size() < config.getMinSyncReplicas();
     if (quorumNotMet) {
