@@ -125,6 +125,14 @@ const Fields: React.FC<FieldsProps> = ({handleSubmit, tenants}) => {
 							<Select
 								value={selected.id}
 								onValueChange={(id) => {
+									// Radix's Select.Root mirrors its value onto a hidden native <select>
+									// for native form/autofill support; a timing gap between that mirror
+									// updating and its <option>s mounting can make the browser reset the
+									// native element's selection and echo a spurious onValueChange("")
+									// back — not a real user pick, so ignore it rather than reset the filter.
+									if (!id) {
+										return;
+									}
 									const nextSelected = PROCESS_FILTERS.find((filter) => filter.id === id) ?? DEFAULT_PROCESS_FILTER;
 									input.onChange(nextSelected.hasStartForm);
 									handleSubmit();
@@ -158,6 +166,11 @@ const Fields: React.FC<FieldsProps> = ({handleSubmit, tenants}) => {
 								<Select
 									value={selectedTenantId}
 									onValueChange={(tenantId) => {
+										// See the hasStartForm Select above — same guard against a spurious
+										// empty echo from Radix's hidden native-select mirror.
+										if (!tenantId) {
+											return;
+										}
 										input.onChange(tenantId);
 										handleSubmit();
 									}}
