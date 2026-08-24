@@ -53,4 +53,17 @@ public final class DelayReplicationSignalStrategy implements ReplicationSignalSt
       final List<? extends ReplicationStatus> statuses, final Optional<Duration> queueHeadAge) {
     return Duration.ZERO;
   }
+
+  /**
+   * Wakes up exactly when the oldest queued entry's release time ({@code enqueueTime + delay}) is
+   * due, instead of on the shared polling cadence - {@code remaining = delay - queueHeadAge}, with
+   * an empty {@code queueHeadAge} (queue empty) falling back to waiting the full {@code delay}.
+   */
+  @Override
+  public Duration nextCheckDelay(
+      final Duration pollingInterval, final Optional<Duration> queueHeadAge) {
+    final long remainingMs =
+        config.getDelay().toMillis() - queueHeadAge.orElse(Duration.ZERO).toMillis();
+    return Duration.ofMillis(Math.max(1, remainingMs));
+  }
 }

@@ -72,6 +72,9 @@ class DefaultReplicationControllerTest {
     when(strategy.fetchStatuses()).thenReturn(List.of());
     when(strategy.computeConfirmedMarker(any())).thenReturn(ReplicationSignalStrategy.UNCONFIRMED);
     when(strategy.computePauseLag(any(), any())).thenReturn(Duration.ZERO);
+    // a mocked strategy does not run the interface's own default method body, so this must be
+    // stubbed explicitly even though it mirrors the default's behavior
+    when(strategy.nextCheckDelay(any(), any())).thenReturn(POLLING_INTERVAL);
   }
 
   private DefaultReplicationController createController() {
@@ -190,6 +193,20 @@ class DefaultReplicationControllerTest {
 
     // then - reschedule must still happen even after an exception
     verify(controller, times(2)).scheduleCancellableTask(eq(POLLING_INTERVAL), any());
+  }
+
+  @Test
+  void shouldRescheduleUsingStrategysNextCheckDelay() {
+    // given - the strategy asks for a different delay than the configured polling interval
+    final var customDelay = Duration.ofMillis(750);
+    when(strategy.nextCheckDelay(any(), any())).thenReturn(customDelay);
+    final var replicationController = createController();
+
+    // when
+    replicationController.checkReplication();
+
+    // then - reschedule uses the strategy's returned delay, not the configured polling interval
+    verify(controller).scheduleCancellableTask(eq(customDelay), any());
   }
 
   @Test

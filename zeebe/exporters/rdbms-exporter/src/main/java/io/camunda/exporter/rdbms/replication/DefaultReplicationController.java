@@ -176,8 +176,10 @@ public final class DefaultReplicationController implements ReplicationController
     } finally {
       // if null, controller was closed during check
       if (replicationCheckTask != null) {
+        final Duration nextDelay =
+            strategy.nextCheckDelay(config.getPollingInterval(), queueHeadAge());
         replicationCheckTask =
-            controller.scheduleCancellableTask(config.getPollingInterval(), this::checkReplication);
+            controller.scheduleCancellableTask(nextDelay, this::checkReplication);
       }
     }
   }

@@ -64,4 +64,14 @@ public interface ReplicationSignalStrategy {
    */
   Duration computePauseLag(
       List<? extends ReplicationStatus> statuses, Optional<Duration> queueHeadAge);
+
+  /**
+   * The delay before the next periodic check. Defaults to {@code pollingInterval} unchanged;
+   * overridden only by a strategy (a fixed-delay one) whose confirmation deadline is a precise
+   * point in time it would rather wake up for exactly, instead of on a fixed poll cadence.
+   */
+  default Duration nextCheckDelay(
+      final Duration pollingInterval, final Optional<Duration> queueHeadAge) {
+    return pollingInterval;
+  }
 }

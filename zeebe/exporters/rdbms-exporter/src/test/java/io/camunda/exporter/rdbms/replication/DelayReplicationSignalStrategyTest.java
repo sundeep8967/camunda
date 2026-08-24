@@ -80,4 +80,42 @@ class DelayReplicationSignalStrategyTest {
     assertThat(strategy.computePauseLag(List.of(), Optional.of(Duration.ofDays(365))))
         .isEqualTo(Duration.ZERO);
   }
+
+  @Test
+  void shouldWaitFullDelayWhenQueueIsEmpty() {
+    // given - nothing queued, so there is no release time to wake up for specifically
+    final var strategy = createStrategy();
+
+    // when
+    final Duration nextDelay = strategy.nextCheckDelay(Duration.ofSeconds(5), Optional.empty());
+
+    // then
+    assertThat(nextDelay).isEqualTo(DELAY);
+  }
+
+  @Test
+  void shouldWaitOnlyUntilOldestQueuedEntryIsDue() {
+    // given - the oldest queued entry has already waited 10s out of a 30s delay
+    final var strategy = createStrategy();
+
+    // when
+    final Duration nextDelay =
+        strategy.nextCheckDelay(Duration.ofSeconds(5), Optional.of(Duration.ofSeconds(10)));
+
+    // then
+    assertThat(nextDelay).isEqualTo(Duration.ofSeconds(20));
+  }
+
+  @Test
+  void shouldFloorToOneMillisecondWhenEntryIsAlreadyOverdue() {
+    // given - the oldest queued entry has been waiting longer than the delay itself
+    final var strategy = createStrategy();
+
+    // when
+    final Duration nextDelay =
+        strategy.nextCheckDelay(Duration.ofSeconds(5), Optional.of(Duration.ofSeconds(45)));
+
+    // then - never returns zero or negative, which would busy-loop the scheduler
+    assertThat(nextDelay).isEqualTo(Duration.ofMillis(1));
+  }
 }
