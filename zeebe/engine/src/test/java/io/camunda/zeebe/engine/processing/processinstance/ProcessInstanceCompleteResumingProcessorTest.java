@@ -16,12 +16,14 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.camunda.zeebe.engine.processing.message.command.SubscriptionCommandSender;
 import io.camunda.zeebe.engine.processing.streamprocessor.writers.SideEffectWriter;
 import io.camunda.zeebe.engine.processing.streamprocessor.writers.StateWriter;
 import io.camunda.zeebe.engine.processing.streamprocessor.writers.TypedRejectionWriter;
 import io.camunda.zeebe.engine.processing.streamprocessor.writers.Writers;
 import io.camunda.zeebe.engine.processing.timer.DueDateTimerCheckScheduler;
 import io.camunda.zeebe.engine.state.immutable.ElementInstanceState;
+import io.camunda.zeebe.engine.state.immutable.ProcessMessageSubscriptionState;
 import io.camunda.zeebe.engine.state.immutable.SuspensionState;
 import io.camunda.zeebe.engine.state.instance.ElementInstance;
 import io.camunda.zeebe.engine.util.MockTypedRecord;
@@ -44,6 +46,8 @@ public final class ProcessInstanceCompleteResumingProcessorTest {
   private SideEffectWriter sideEffectWriter;
   private TypedRejectionWriter rejectionWriter;
   private DueDateTimerCheckScheduler timerChecker;
+  private ProcessMessageSubscriptionState processMessageSubscriptionState;
+  private SubscriptionCommandSender subscriptionCommandSender;
   private ProcessInstanceCompleteResumingProcessor processor;
 
   @BeforeEach
@@ -54,6 +58,8 @@ public final class ProcessInstanceCompleteResumingProcessorTest {
     sideEffectWriter = mock(SideEffectWriter.class);
     rejectionWriter = mock(TypedRejectionWriter.class);
     timerChecker = mock(DueDateTimerCheckScheduler.class);
+    processMessageSubscriptionState = mock(ProcessMessageSubscriptionState.class);
+    subscriptionCommandSender = mock(SubscriptionCommandSender.class);
 
     final var writers = mock(Writers.class);
     when(writers.state()).thenReturn(stateWriter);
@@ -62,7 +68,12 @@ public final class ProcessInstanceCompleteResumingProcessorTest {
 
     processor =
         new ProcessInstanceCompleteResumingProcessor(
-            elementInstanceState, suspensionState, writers, timerChecker);
+            elementInstanceState,
+            suspensionState,
+            writers,
+            timerChecker,
+            processMessageSubscriptionState,
+            subscriptionCommandSender);
 
     // default: the common case of an active instance still marked RESUMING
     when(suspensionState.getSuspensionState(PROCESS_INSTANCE_KEY))
