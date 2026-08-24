@@ -191,7 +191,8 @@ public final class ProcessInstanceSuspendProcessor
                   record.getElementInstanceKey(),
                   record.getProcessDefinitionKey(),
                   record.getMessageNameBuffer(),
-                  record.getTenantId());
+                  record.getTenantId(),
+                  record.getSubscriptionKey());
             }
             return true;
           });

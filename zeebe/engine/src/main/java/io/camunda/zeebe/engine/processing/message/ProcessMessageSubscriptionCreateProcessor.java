@@ -63,6 +63,9 @@ public final class ProcessMessageSubscriptionCreateProcessor
             elementInstanceKey, subscriptionRecord.getMessageNameBuffer(), tenantId);
 
     if (subscription != null && subscription.isOpening()) {
+      // Propagate the message-side subscription key received in the ack so the PI-side record
+      // stores it; the suspend processor reads it back when sending the close command.
+      subscription.getRecord().setSubscriptionKey(subscriptionRecord.getSubscriptionKey());
       stateWriter.appendFollowUpEvent(
           subscription.getKey(),
           ProcessMessageSubscriptionIntent.CREATED,

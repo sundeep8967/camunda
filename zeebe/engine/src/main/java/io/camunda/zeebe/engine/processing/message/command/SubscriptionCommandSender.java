@@ -152,7 +152,8 @@ public class SubscriptionCommandSender {
       final DirectBuffer messageName,
       final boolean closeOnCorrelate,
       final String tenantId,
-      final DirectBuffer businessId) {
+      final DirectBuffer businessId,
+      final long subscriptionKey) {
     return handleFollowUpCommandBasedOnPartition(
         Protocol.decodePartitionId(processInstanceKey),
         ValueType.PROCESS_MESSAGE_SUBSCRIPTION,
@@ -166,7 +167,8 @@ public class SubscriptionCommandSender {
             .setMessageName(messageName)
             .setInterrupting(closeOnCorrelate)
             .setTenantId(tenantId)
-            .setBusinessId(businessId));
+            .setBusinessId(businessId)
+            .setSubscriptionKey(subscriptionKey));
   }
 
   public boolean correlateProcessMessageSubscription(
@@ -266,7 +268,8 @@ public class SubscriptionCommandSender {
       final long elementInstanceKey,
       final long processDefinitionKey,
       final DirectBuffer messageName,
-      final String tenantId) {
+      final String tenantId,
+      final long subscriptionKey) {
     return handleFollowUpCommandBasedOnPartition(
         subscriptionPartitionId,
         ValueType.MESSAGE_SUBSCRIPTION,
@@ -277,7 +280,8 @@ public class SubscriptionCommandSender {
             .setProcessDefinitionKey(processDefinitionKey)
             .setMessageKey(-1L)
             .setMessageName(messageName)
-            .setTenantId(tenantId));
+            .setTenantId(tenantId)
+            .setSubscriptionKey(subscriptionKey));
   }
 
   /**
