@@ -28,9 +28,7 @@ import org.slf4j.LoggerFactory;
  * Queues exporter positions flushed via {@link #onFlush(long)} until a {@link
  * ReplicationSignalStrategy}-specific condition proves them safely replicated, then acknowledges
  * the highest confirmed position to the {@link Controller}. A periodic check polls the strategy's
- * replication signal to determine what is confirmed and whether the exporter should be paused; the
- * strategy is the only thing that varies between LSN-, lag-, and delay-based replication - this
- * class owns the queue, debouncing, pause tracking, scheduling, and metrics for all of them.
+ * replication signal to determine what is confirmed and whether the exporter should be paused.
  */
 public final class DefaultReplicationController implements ReplicationController {
 
@@ -72,8 +70,8 @@ public final class DefaultReplicationController implements ReplicationController
   }
 
   /**
-   * Records the flushed position, captures the strategy's fallible marker, and enqueues an entry
-   * built from it. On failure, force-pauses the exporter and logs instead of propagating.
+   * Records the flushed position and enqueues it for confirmation. On failure, force-pauses the
+   * exporter and logs instead of propagating.
    */
   @Override
   public void onFlush(final long exporterPosition) {
@@ -97,9 +95,8 @@ public final class DefaultReplicationController implements ReplicationController
   }
 
   /**
-   * Queues the entry for later confirmation, or dropping it if the previous one was added
-   * less than {@code queueDebounceTime} ago. Silently drops the entry if the queue is full - it's
-   * fine, the next successfully queued entry will confirm the position anyway.
+   * Enqueues the flushed position for later confirmation. Drops it if the previous entry was added
+   * less than {@code queueDebounceTime} ago, or if the queue is full.
    */
   private void enqueue(final long exporterPosition) {
     final long now = clock.millis();

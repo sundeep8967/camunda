@@ -13,9 +13,9 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * The two decision points that vary between replication signals (LSN, reported lag, a fixed delay);
- * everything else - the queue, debouncing, pausing, scheduling, metrics - is identical regardless
- * of signal and lives on {@link DefaultReplicationController}.
+ * The decision points that vary between replication signals (LSN, reported lag, a fixed delay).
+ * Everything else - the queue, debouncing, pausing, scheduling, metrics - lives on {@link
+ * DefaultReplicationController}.
  */
 public interface ReplicationSignalStrategy<T extends ReplicationStatus> {
 
@@ -25,50 +25,33 @@ public interface ReplicationSignalStrategy<T extends ReplicationStatus> {
    */
   long UNCONFIRMED = Long.MIN_VALUE;
 
-  /**
-   * Sentinel {@link Duration} meaning "treat as worst-case lag" (quorum not met, or a null/missing
-   * per-replica lag reading) - mirrors the null-as-worst-case idiom already used for individual
-   * status fields elsewhere in this codebase.
-   */
+  /** Sentinel {@link Duration} meaning "treat as worst-case lag". */
   Duration PAUSE_WORST_CASE = Duration.ofMillis(Long.MAX_VALUE);
 
   /**
-   * Captures the fallible value to tag a freshly flushed position with (an LSN, a DB-clock-ms
-   * reading, or {@code now + delay}). Called once per flush; a thrown exception force-pauses the
-   * exporter.
+   * Captures the value that will later prove a freshly flushed position has been safely replicated
+   * (an LSN, a DB-clock-ms reading, or {@code now + delay}). Throwing pauses the exporter.
    */
   long captureFlushMarker();
 
-  /**
-   * Polls the current per-replica statuses. Called once per periodic check; the same list is fed to
-   * both decision methods below and to metrics recording, so there is exactly one round trip per
-   * check regardless of which strategy is wired in.
-   */
+  /** Returns the current per-replica replication statuses. */
   List<T> fetchStatuses();
 
   /**
-   * When to acknowledge an exporter position. An entry is confirmed once {@code entry.marker() <=
-   * computeConfirmedMarker(statuses)}. Returns {@link #UNCONFIRMED} when nothing should be
-   * confirmed this round.
+   * The confirmation threshold: an entry is confirmed once {@code entry.marker() <=
+   * computeConfirmedMarker(statuses)}. Returns {@link #UNCONFIRMED} when nothing is confirmed.
    */
   long computeConfirmedMarker(List<T> statuses);
 
   /**
-   * When to pause: the current lag, compared by the shared controller against {@code maxLag}.
-   * {@code queueHeadAge} is the age of the oldest still-unconfirmed queued entry, computed
-   * generically from the shared controller's own clock, or {@link Optional#empty()} when the queue
-   * is empty - distinct from "an entry that is zero milliseconds old" - so a strategy can gate its
-   * own quorum handling on queue emptiness the same way a caller reading the queue directly would.
-   * A strategy may fold this value in (when it has no other lag signal of its own) or ignore it
-   * (when it does). Returns {@link #PAUSE_WORST_CASE} when quorum is not met.
+   * The current replication lag, compared against {@code maxLag} to decide whether to pause. {@code
+   * queueHeadAge} is the age of the oldest still-unconfirmed queued entry, or {@link
+   * Optional#empty()} when the queue is empty. Returns {@link #PAUSE_WORST_CASE} when quorum is not
+   * met.
    */
   Duration computePauseLag(List<T> statuses, Optional<Duration> queueHeadAge);
 
-  /**
-   * The delay before the next periodic check. Defaults to {@code pollingInterval} unchanged;
-   * overridden only by a strategy (a fixed-delay one) whose confirmation deadline is a precise
-   * point in time it would rather wake up for exactly, instead of on a fixed poll cadence.
-   */
+  /** The delay before the next periodic check. Defaults to {@code pollingInterval} unchanged. */
   default Duration nextCheckDelay(
       final Duration pollingInterval, final Optional<Duration> queueHeadAge) {
     return pollingInterval;

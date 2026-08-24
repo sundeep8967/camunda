@@ -62,13 +62,10 @@ public final class LsnReplicationSignalStrategy
   }
 
   /**
-   * This mode has no per-replica lag figure of its own, so the pause decision falls back to {@code
-   * queueHeadAge} - how long the oldest still-unconfirmed position has been waiting, or {@link
-   * Duration#ZERO} if nothing is queued. Quorum loss is only treated as pause-worthy while the
-   * queue is empty ({@code queueHeadAge} absent): if a position is still pending, its own
-   * queue-head-age lag signal already covers the "replication looks unhealthy" case, so a replica
-   * shortage alone doesn't force an immediate pause on top of that - it does once the queue drains
-   * and there is no other signal left to judge staleness by.
+   * Falls back to {@code queueHeadAge} - how long the oldest still-unconfirmed position has been
+   * waiting, or {@link Duration#ZERO} if nothing is queued - since this mode has no per-replica lag
+   * figure of its own. Quorum loss is only pause-worthy while the queue is empty; a pending
+   * position's own queue-head-age already signals staleness.
    */
   @Override
   public Duration computePauseLag(

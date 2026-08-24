@@ -722,9 +722,8 @@ public class ExporterConfiguration {
                 "asyncReplication.minSyncReplicas must be greater 0 but was %d", minSyncReplicas));
       }
 
-      // queueCapacity/queueDebounceTime/pollingInterval/maxLag now back every replication
-      // type's controller, not just LOG_SEQ/TIME_LAG's, so they must be validated regardless
-      // of type.
+      // queueCapacity, queueDebounceTime, pollingInterval, and maxLag apply to every
+      // replication type, so they are validated unconditionally.
       checkNonNegativeDuration(queueDebounceTime, "asyncReplication.queueDebounceTime", errors);
       if (queueCapacity <= 0) {
         errors.add(

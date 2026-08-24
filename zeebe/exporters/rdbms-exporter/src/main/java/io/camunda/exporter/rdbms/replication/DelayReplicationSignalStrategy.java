@@ -57,8 +57,7 @@ public final class DelayReplicationSignalStrategy
 
   /**
    * Wakes up exactly when the oldest queued entry's release time ({@code enqueueTime + delay}) is
-   * due, instead of on the shared polling cadence - {@code remaining = delay - queueHeadAge}, with
-   * an empty {@code queueHeadAge} (queue empty) falling back to waiting the full {@code delay}.
+   * due, rather than on a fixed cadence. Waits the full {@code delay} when nothing is queued.
    */
   @Override
   public Duration nextCheckDelay(

@@ -16,11 +16,9 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Monitors the replication lag reported directly by the database (in milliseconds). Unlike {@link
- * LsnReplicationSignalStrategy}, this strategy does not track log-sequence numbers, only a
- * per-replica lag figure and an absolute as-of point in time - safe to use for confirmation even if
- * the underlying signal goes stale, since it doesn't drift with the wall clock the way "now minus a
- * relative lag" would.
+ * Monitors the replication lag reported directly by the database (in milliseconds), together with
+ * an absolute as-of point in time for confirmation - stable even if the underlying signal goes
+ * stale, since it doesn't drift with the wall clock the way "now minus a relative lag" would.
  */
 public final class TimeMonitoringReplicationSignalStrategy
     implements ReplicationSignalStrategy<ReplicationLagStatus> {
@@ -47,8 +45,7 @@ public final class TimeMonitoringReplicationSignalStrategy
   /**
    * The point in time, as observed by the database, up to which at least {@code minSyncReplicas}
    * replicas have confirmed applying - the lowest as-of value among the top {@code minSyncReplicas}
-   * replicas, mirroring {@link LsnReplicationSignalStrategy}'s LSN-based computation. Returns
-   * {@link #UNCONFIRMED} when quorum isn't met.
+   * replicas. Returns {@link #UNCONFIRMED} when quorum isn't met.
    */
   @Override
   public long computeConfirmedMarker(final List<ReplicationLagStatus> statuses) {
@@ -65,11 +62,8 @@ public final class TimeMonitoringReplicationSignalStrategy
 
   /**
    * The worst replication lag among the {@code minSyncReplicas} most caught-up replicas; ignores
-   * {@code queueHeadAge}, since this mode has its own replica-reported lag signal. Limiting to the
-   * top {@code minSyncReplicas} mirrors {@link #computeConfirmedMarker}: an extra, optional replica
-   * beyond the required quorum must not be able to force a pause on its own just by lagging, the
-   * same way it can't block confirmation on its own. A null per-replica lag is treated as
-   * worst-case, never as zero.
+   * {@code queueHeadAge}, since this mode has its own replica-reported lag signal. A null
+   * per-replica lag is treated as worst-case, never as zero.
    */
   @Override
   public Duration computePauseLag(
