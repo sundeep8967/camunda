@@ -114,4 +114,16 @@ public interface MessageSubscriptionRecordValue
    * @since 8.10
    */
   BpmnElementType getElementType();
+
+  /**
+   * Returns the stable identity key of the message-side subscription, assigned when the
+   * subscription is first created on the message partition. Used to guard delete commands against
+   * stale races: a delete that quotes an old key is rejected rather than deleting a freshly
+   * re-created subscription. Returns {@code -1} for subscriptions created before this field was
+   * introduced.
+   *
+   * @return the subscription key, or {@code -1} if not set
+   * @since 8.10
+   */
+  long getSubscriptionKey();
 }

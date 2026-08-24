@@ -105,4 +105,15 @@ public interface ProcessMessageSubscriptionRecordValue
    * @since 8.10
    */
   BpmnElementType getElementType();
+
+  /**
+   * Returns the stable identity key of the message-side subscription, assigned when the
+   * subscription is first created on the message partition and echoed back to the process instance
+   * partition in the open acknowledgement. Used to guard delete commands against stale races.
+   * Returns {@code -1} for subscriptions created before this field was introduced.
+   *
+   * @return the subscription key, or {@code -1} if not set
+   * @since 8.10
+   */
+  long getSubscriptionKey();
 }
