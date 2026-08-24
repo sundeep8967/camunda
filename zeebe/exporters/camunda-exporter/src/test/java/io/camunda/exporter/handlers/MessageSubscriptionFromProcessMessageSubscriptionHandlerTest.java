@@ -252,6 +252,7 @@ final class MessageSubscriptionFromProcessMessageSubscriptionHandlerTest {
     final String tenantId = "tenantId";
     final String messageName = "messageName";
     final String correlationKey = "correlationKey";
+    final String businessId = "businessId";
     final Intent intent = ProcessMessageSubscriptionIntent.CREATED;
     final var recordValue =
         ImmutableProcessMessageSubscriptionRecordValue.builder()
@@ -264,6 +265,7 @@ final class MessageSubscriptionFromProcessMessageSubscriptionHandlerTest {
             .withTenantId(tenantId)
             .withMessageName(messageName)
             .withCorrelationKey(correlationKey)
+            .withBusinessId(businessId)
             .build();
     final Record<ProcessMessageSubscriptionRecordValue> record =
         factory.generateRecord(
@@ -297,6 +299,7 @@ final class MessageSubscriptionFromProcessMessageSubscriptionHandlerTest {
     assertThat(entity.getPositionProcessMessageSubscription()).isEqualTo(position);
     assertThat(entity.getMetadata().getMessageName()).isEqualTo(messageName);
     assertThat(entity.getMetadata().getCorrelationKey()).isEqualTo(correlationKey);
+    assertThat(entity.getBusinessId()).isEqualTo(businessId);
     assertThat(entity.getRootProcessInstanceKey()).isEqualTo(rootProcessInstanceKey);
   }
 

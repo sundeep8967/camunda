@@ -144,6 +144,7 @@ final class MessageSubscriptionFromMessageStartEventSubscriptionHandlerTest {
     final String messageName = "myMessage";
     final String tenantId = "<default>";
     final String correlationKey = "correlationKey";
+    final String businessId = "businessId";
     final MessageStartEventSubscriptionIntent intent = MessageStartEventSubscriptionIntent.CREATED;
 
     final ImmutableMessageStartEventSubscriptionRecordValue value =
@@ -155,6 +156,7 @@ final class MessageSubscriptionFromMessageStartEventSubscriptionHandlerTest {
             .withTenantId(tenantId)
             .withProcessInstanceKey(-1L)
             .withCorrelationKey(correlationKey)
+            .withBusinessId(businessId)
             .build();
 
     final Record<MessageStartEventSubscriptionRecordValue> record =
@@ -190,6 +192,7 @@ final class MessageSubscriptionFromMessageStartEventSubscriptionHandlerTest {
     assertThat(entity.getPositionProcessMessageSubscription()).isEqualTo(position);
     assertThat(entity.getMetadata().getMessageName()).isEqualTo(messageName);
     assertThat(entity.getMetadata().getCorrelationKey()).isEqualTo(correlationKey);
+    assertThat(entity.getBusinessId()).isEqualTo(businessId);
     assertThat(entity.getRootProcessInstanceKey()).isNull();
   }
 

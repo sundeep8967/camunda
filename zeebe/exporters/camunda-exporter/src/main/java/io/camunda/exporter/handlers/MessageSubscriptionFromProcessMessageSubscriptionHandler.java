@@ -93,6 +93,7 @@ public class MessageSubscriptionFromProcessMessageSubscriptionHandler
         .setFlowNodeId(elementId)
         .setTenantId(tenantOrDefault(recordValue.getTenantId()))
         .setPositionProcessMessageSubscription(record.getPosition())
+        .setBusinessId(recordValue.getBusinessId())
         .setMessageSubscriptionType("PROCESS_EVENT");
 
     final MessageSubscriptionMetadataEntity eventMetadata = new MessageSubscriptionMetadataEntity();
