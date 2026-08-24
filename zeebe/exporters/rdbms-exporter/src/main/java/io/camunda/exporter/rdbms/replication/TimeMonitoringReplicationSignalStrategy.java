@@ -61,17 +61,18 @@ public final class TimeMonitoringReplicationSignalStrategy
   }
 
   /**
-   * The worst replication lag among the {@code minSyncReplicas} most caught-up replicas; ignores
-   * {@code queueHeadAge}, since this mode has its own replica-reported lag signal. A null
-   * per-replica lag is treated as worst-case, never as zero.
+   * The worst replication lag among the {@code minSyncReplicas} most caught-up replicas when quorum
+   * is met. When quorum is not met, falls back to {@code queueHeadAge} - how long the oldest
+   * still-unconfirmed position has been waiting - so a replica shortage is graced by {@code maxLag}
+   * the same way a healthy-but-slow replica would be, rather than pausing immediately; returns
+   * {@link #PAUSE_WORST_CASE} only once the queue is also empty, since there is then no staleness
+   * signal to measure by. A null per-replica lag is treated as worst-case, never as zero.
    */
   @Override
   public Duration computePauseLag(
       final List<ReplicationLagStatus> statuses, final Optional<Duration> queueHeadAge) {
-    final boolean quorumNotMet =
-        queueHeadAge.isEmpty() && statuses.size() < config.getMinSyncReplicas();
-    if (quorumNotMet) {
-      return PAUSE_WORST_CASE;
+    if (statuses.size() < config.getMinSyncReplicas()) {
+      return queueHeadAge.orElse(PAUSE_WORST_CASE);
     }
     return statuses.stream()
         .mapToLong(s -> s.replicationLagMs() != null ? s.replicationLagMs() : Long.MAX_VALUE)

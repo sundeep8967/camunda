@@ -173,17 +173,34 @@ class TimeMonitoringReplicationSignalStrategyTest {
     }
 
     @Test
-    void shouldNotReturnPauseWorstCaseWhenQuorumNotMetButQueueNonEmpty() {
-      // given - minSyncReplicas=2, only one replica reporting, but queue-head age exists
+    void shouldReturnQueueHeadAgeWhenQuorumNotMetButQueueNonEmpty() {
+      // given - minSyncReplicas=2, only one replica reporting (with a much smaller reported lag
+      // than the queue-head age), and a position is queued and waiting
       config.setMinSyncReplicas(2);
       final var strategy = createStrategy();
-      final var statuses = List.of(new ReplicationLagStatus("r1", 1_000L, 0L));
+      final var statuses = List.of(new ReplicationLagStatus("r1", 100L, 0L));
 
-      // when - quorum-shortage fallback is disabled while queue-head age is present
-      final Duration lag = strategy.computePauseLag(statuses, Optional.of(Duration.ofSeconds(1)));
+      // when - a replica shortage is graced by queueHeadAge (and so, ultimately, by maxLag)
+      // instead of forcing an immediate worst-case pause
+      final Duration lag = strategy.computePauseLag(statuses, Optional.of(Duration.ofSeconds(5)));
 
-      // then - result comes from replica-reported lag, not from PAUSE_WORST_CASE
-      assertThat(lag).isEqualTo(Duration.ofMillis(1_000L));
+      // then - queueHeadAge wins over the partial replica-reported lag
+      assertThat(lag).isEqualTo(Duration.ofSeconds(5));
+    }
+
+    @Test
+    void shouldReturnQueueHeadAgeWhenNoReplicasConnectedButQueueNonEmpty() {
+      // given - no replicas reporting at all: there is no replica-reported lag to fall back to,
+      // but a position is queued and aging
+      final var strategy = createStrategy();
+
+      // when - must not silently reduce to Duration.ZERO just because statuses is empty; the
+      // shared controller compares this against maxLag itself, so a pause happens once this
+      // queue-head age actually exceeds maxLag, not immediately
+      final Duration lag = strategy.computePauseLag(List.of(), Optional.of(Duration.ofSeconds(10)));
+
+      // then
+      assertThat(lag).isEqualTo(Duration.ofSeconds(10));
     }
 
     @Test
