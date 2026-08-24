@@ -94,6 +94,7 @@ public class MessageSubscriptionFromMessageStartEventSubscriptionExportHandler
         .dateTime(toOffsetDateTime(Instant.ofEpochMilli(record.getTimestamp())))
         .messageName(value.getMessageName())
         .correlationKey(value.getCorrelationKey())
+        .businessId(value.getBusinessId())
         .tenantId(value.getTenantId())
         .partitionId(record.getPartitionId())
         .processDefinitionName(

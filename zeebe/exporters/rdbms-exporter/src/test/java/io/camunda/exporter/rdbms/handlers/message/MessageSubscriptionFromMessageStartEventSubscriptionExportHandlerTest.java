@@ -158,6 +158,7 @@ final class MessageSubscriptionFromMessageStartEventSubscriptionExportHandlerTes
     final String tenantId = "tenant-1";
     final String processName = "Process One";
     final int processVersion = 2;
+    final String businessId = "order-100";
     final Map<String, String> extProps =
         Map.of("io.camunda.tool:name", "myTool", "inbound.type", "io.camunda:http-webhook:1");
 
@@ -169,6 +170,7 @@ final class MessageSubscriptionFromMessageStartEventSubscriptionExportHandlerTes
             .withCorrelationKey(correlationKey)
             .withProcessDefinitionKey(pdKey)
             .withTenantId(tenantId)
+            .withBusinessId(businessId)
             .build();
 
     final Record<MessageStartEventSubscriptionRecordValue> record =
@@ -205,6 +207,7 @@ final class MessageSubscriptionFromMessageStartEventSubscriptionExportHandlerTes
     assertThat(model.messageSubscriptionType()).isEqualTo(MessageSubscriptionType.START_EVENT);
     assertThat(model.messageName()).isEqualTo(messageName);
     assertThat(model.correlationKey()).isEqualTo(correlationKey);
+    assertThat(model.businessId()).isEqualTo(businessId);
     assertThat(model.tenantId()).isEqualTo(tenantId);
     assertThat(model.partitionId()).isEqualTo(partitionId);
     assertThat(model.dateTime())
