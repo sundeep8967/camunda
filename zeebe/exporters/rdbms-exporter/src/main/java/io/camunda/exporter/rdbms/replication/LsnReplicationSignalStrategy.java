@@ -50,9 +50,6 @@ public final class LsnReplicationSignalStrategy implements ReplicationSignalStra
    */
   @Override
   public long computeConfirmedMarker(final List<? extends ReplicationStatus> statuses) {
-    if (lsnProvider.getCurrent() < 0) {
-      return UNCONFIRMED;
-    }
     if (statuses.size() < config.getMinSyncReplicas()) {
       return UNCONFIRMED;
     }
