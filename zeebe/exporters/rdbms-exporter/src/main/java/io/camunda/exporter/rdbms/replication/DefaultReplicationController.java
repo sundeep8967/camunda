@@ -71,11 +71,6 @@ public final class DefaultReplicationController implements ReplicationController
         controller.scheduleCancellableTask(config.getPollingInterval(), this::checkReplication);
   }
 
-  @Override
-  public boolean isReplicationInSync() {
-    return !paused.get();
-  }
-
   /**
    * Records the flushed position, captures the strategy's fallible marker, and enqueues an entry
    * built from it. On failure, force-pauses the exporter and logs instead of propagating.
@@ -84,14 +79,7 @@ public final class DefaultReplicationController implements ReplicationController
   public void onFlush(final long exporterPosition) {
     flushedPosition.set(exporterPosition);
     try {
-      final long marker = strategy.captureFlushMarker();
-      log.debug(
-          "[RDBMS Exporter P{}] Flushed position {}, captured replication marker {}, enqueueing "
-              + "for replication check",
-          partitionId,
-          exporterPosition,
-          marker);
-      enqueue(new QueuedPosition(exporterPosition, marker, clock.millis()));
+      enqueue(exporterPosition);
     } catch (final Exception e) {
       paused.set(true);
       log.error(
@@ -103,12 +91,17 @@ public final class DefaultReplicationController implements ReplicationController
     }
   }
 
+  @Override
+  public boolean isReplicationInSync() {
+    return !paused.get();
+  }
+
   /**
-   * Queues the entry for later confirmation, coalescing it into the previous one if it was added
+   * Queues the entry for later confirmation, or dropping it if the previous one was added
    * less than {@code queueDebounceTime} ago. Silently drops the entry if the queue is full - it's
    * fine, the next successfully queued entry will confirm the position anyway.
    */
-  private void enqueue(final QueuedPosition entry) {
+  private void enqueue(final long exporterPosition) {
     final long now = clock.millis();
 
     if (queueDebounceMillis > 0
@@ -117,16 +110,32 @@ public final class DefaultReplicationController implements ReplicationController
       log.debug(
           "[RDBMS Exporter P{}] Debouncing flush (position={}), last added {} ms ago",
           partitionId,
-          entry.position(),
+          exporterPosition,
           now - lastAdded);
       return;
     }
 
-    if (!pendingEntries.offer(entry)) {
+    if (pendingEntries.remainingCapacity() == 0) {
       log.warn(
           "[RDBMS Exporter P{}] Replication queue is full, dropping position entry (position={})",
           partitionId,
-          entry.position());
+          exporterPosition);
+      return;
+    }
+
+    final long marker = strategy.captureFlushMarker();
+    log.debug(
+        "[RDBMS Exporter P{}] Flushed position {}, captured replication marker {}, enqueueing "
+            + "for replication check",
+        partitionId,
+        exporterPosition,
+        marker);
+
+    if (!pendingEntries.offer(new QueuedPosition(exporterPosition, marker, now))) {
+      log.warn(
+          "[RDBMS Exporter P{}] Replication queue is full, dropping position entry (position={})",
+          partitionId,
+          exporterPosition);
     } else {
       lastAdded = now;
     }
