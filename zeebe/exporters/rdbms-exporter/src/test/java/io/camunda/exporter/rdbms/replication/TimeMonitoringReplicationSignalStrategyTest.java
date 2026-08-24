@@ -173,8 +173,11 @@ class TimeMonitoringReplicationSignalStrategyTest {
     }
 
     @Test
-    void shouldReturnMaxLagAcrossReplicas() {
-      // given
+    void shouldReturnWorstLagAmongTheTopMinSyncReplicas() {
+      // given - minSyncReplicas=2 with 3 replicas connected; only the worst of the two BEST
+      // (lowest-lag) replicas determines the pause decision, mirroring
+      // computeConfirmedMarker's top-N handling
+      config.setMinSyncReplicas(2);
       final var strategy = createStrategy();
       final var statuses =
           List.of(
@@ -185,8 +188,9 @@ class TimeMonitoringReplicationSignalStrategyTest {
       // when
       final Duration lag = strategy.computePauseLag(statuses, Duration.ZERO);
 
-      // then
-      assertThat(lag).isEqualTo(Duration.ofMillis(20_000L));
+      // then - top 2 by lowest lag are r1 (5_000) and r3 (10_000); the straggler r2 (20_000) is
+      // outside the required quorum and must not be able to force a pause on its own
+      assertThat(lag).isEqualTo(Duration.ofMillis(10_000L));
     }
 
     @Test

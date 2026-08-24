@@ -64,8 +64,11 @@ public final class TimeMonitoringReplicationSignalStrategy implements Replicatio
   }
 
   /**
-   * The maximum replication lag reported across all replicas; ignores {@code queueHeadAge}, since
-   * this mode has its own replica-reported lag signal. A null per-replica lag is treated as
+   * The worst replication lag among the {@code minSyncReplicas} most caught-up replicas; ignores
+   * {@code queueHeadAge}, since this mode has its own replica-reported lag signal. Limiting to the
+   * top {@code minSyncReplicas} mirrors {@link #computeConfirmedMarker}: an extra, optional replica
+   * beyond the required quorum must not be able to force a pause on its own just by lagging, the
+   * same way it can't block confirmation on its own. A null per-replica lag is treated as
    * worst-case, never as zero.
    */
   @Override
@@ -76,7 +79,9 @@ public final class TimeMonitoringReplicationSignalStrategy implements Replicatio
     }
     return statuses.stream()
         .mapToLong(s -> s.replicationLagMs() != null ? s.replicationLagMs() : Long.MAX_VALUE)
-        .max()
+        .sorted() // ascending: lowest (best) lag first
+        .limit(config.getMinSyncReplicas()) // the minSyncReplicas most caught-up replicas
+        .max() // the worst among just those
         .stream()
         .mapToObj(Duration::ofMillis)
         .findFirst()
